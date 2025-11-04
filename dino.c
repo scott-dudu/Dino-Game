@@ -7,40 +7,10 @@
 #include <locale.h>
 #include <wchar.h>
 
+#include "sprites.h"
+
 #define MIN_T_HEIGHT 25
 #define MIN_T_WIDTH 85
-
-/**
-    Dino:
-    printf("          ▄▄▄▄▄   \n");  
-    printf("         ██▄██████\n");
-    printf("         ██████▄▄▄\n");
-    printf("        ▄█████    \n");
-    printf("   █▄▄████████▀▀█ \n");
-    printf("    ▀▀██████▀     \n");
-    printf("      █▀  ▀█      \n");
-    printf("      █▄   █▄     \n");
-
-    Cactus:
-    printf("         ▄▄    \n");
-    printf("        ████ ▄▄\n");
-    printf("     ██ ████▄█▀\n");
-    printf("      ▀█████▀  \n");
-    printf("        ████   \n");
-
-    Cacti
-    printf("         ▄▄               ▄▄    \n");
-    printf("        ████ ▄▄       ██ ████ ▄▄\n");
-    printf("     ██ ████▄█▀ ▄  ▄█▄ ▀█████▄█▀\n");
-    printf("      ▀█████▀  ███ ███   ████▀  \n");
-    printf("        ████   ███ ███   ████   \n");
-
-    Bird:
-    printf("         ▄█▄           \n");  
-    printf("       ▄██▄█▄ ▄▄██▀▀▀  \n");
-    printf("           ▀████████▀▀▀\n");
-    printf("              ▀▀▀▀     \n");
- */
 
  /**
   * Allocate and fill in the board.
@@ -48,7 +18,7 @@
 int create_board(wchar_t* board[], int height, int width) {
 
     //Build the sky.
-    for (int r = 0; r < height - 8; r++) {
+    for (int r = 0; r < height - SPRITE_HEIGHT; r++) {
         //Allocate memory for one row. Add one to account for null-terminator.
         wchar_t *sky = (wchar_t *)malloc((width + 1) * sizeof(wchar_t));
 
@@ -63,14 +33,8 @@ int create_board(wchar_t* board[], int height, int width) {
         board[r] = sky;
     }
 
-    wchar_t *dino[8] = {L"          ▄▄▄▄▄   ",  
-                        L"         ██▄██████",
-                        L"         ██████▄▄▄",
-                        L"        ▄█████    ",
-                        L"   █▄▄████████▀▀█ ",
-                        L"    ▀▀██████▀     ",
-                        L"      █▀  ▀█      ",
-                        L"      █▄   █▄     "};
+    wchar_t *dino[8];
+    get_dino(dino);
 
     int len = wcslen(dino[0]);
     int size = sizeof(dino) / sizeof(wchar_t*);
@@ -81,22 +45,18 @@ int create_board(wchar_t* board[], int height, int width) {
         for (int c = 0; c < width; c++) {
             if (c < len) {
                 if (r == height - 3 && dino[r - height + 8][c] == ' ') {
-                    board[r][c] = L'-';
+                    board[r][c] = '-';
                 } else {
                     board[r][c] = dino[r - height + 8][c];
                 }
             } else {
                 if (r == height - 3) {
-                    board[r][c] = L'-';
+                    board[r][c] = '-';
                 } else {
-                    board[r][c] = L' ';
+                    board[r][c] = ' ';
                 }
             }
         }
-    }
-
-    for(int i = 0; i < height; i++) {
-        printf("%ls", board[i]);
     }
 
     return 0;
@@ -131,6 +91,6 @@ int main() {
     wchar_t *board[t_height];
     create_board(board, t_height, t_width);
     
-    free_board(board, t_height);
+    //free_board(board, t_height);
     return 0;
 }
