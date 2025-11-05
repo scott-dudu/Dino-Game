@@ -12,6 +12,9 @@
 #define MIN_T_HEIGHT 25
 #define MIN_T_WIDTH 85
 
+//Removes implicit declaration
+int mvaddwstr();
+
  /**
   * Allocate and fill in the board.
   */
@@ -37,17 +40,16 @@ int create_board(wchar_t* board[], int height, int width) {
     get_dino(dino);
 
     int len = wcslen(dino[0]);
-    int size = sizeof(dino) / sizeof(wchar_t*);
 
-    for (int r = height - 8; r < height; r++) {
+    for (int r = height - SPRITE_HEIGHT; r < height; r++) {
         board[r] = (wchar_t *)malloc((width + 1) * sizeof(wchar_t));
 
         for (int c = 0; c < width; c++) {
             if (c < len) {
-                if (r == height - 3 && dino[r - height + 8][c] == ' ') {
+                if (r == height - 3 && dino[r - height + SPRITE_HEIGHT][c] == ' ') {
                     board[r][c] = '-';
                 } else {
-                    board[r][c] = dino[r - height + 8][c];
+                    board[r][c] = dino[r - height + SPRITE_HEIGHT][c];
                 }
             } else {
                 if (r == height - 3) {
@@ -57,6 +59,8 @@ int create_board(wchar_t* board[], int height, int width) {
                 }
             }
         }
+
+        board[r][width] = '\0';
     }
 
     return 0;
@@ -72,25 +76,56 @@ void free_board(wchar_t* board[], short height) {
     }
 }
 
+void print_board(wchar_t* board[], short height) {
+    for (int r = 0; r < height; r++) {
+        mvaddwstr(r, 0, board[r]);
+    }
+    refresh();
+}
+
 int main() {    
     // Set the locale for wide-character support
     setlocale(LC_ALL, "");
 
+    
+    //Find terminal size.
     struct winsize ws;
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
         perror("ioctl");
         exit(1);
     }
-
+    
     unsigned short t_height = ws.ws_row;
     unsigned short t_width = ws.ws_col;
+    
+    //Check minimum terminal size
+    if (t_height < MIN_T_HEIGHT || t_width < MIN_T_WIDTH) {
+        if (t_height < MIN_T_HEIGHT) {
+            fprintf(stderr, "Terminal height not large enough. Enlarge terminal height.\n");
+        }
+        if (t_width < MIN_T_WIDTH) {
+            fprintf(stderr, "Terminal width not large enough. Enlarge terminal width.\n");
+        }
+        endwin();
+        exit(1);
+    }
+    
+    // Initialize ncurses
+    initscr();
+    cbreak();
+    noecho();
+    curs_set(0);
+    keypad(stdscr, TRUE);
 
-    if (t_height < MIN_T_HEIGHT) t_height = MIN_T_HEIGHT;
-    if (t_width < MIN_T_WIDTH) t_width = MIN_T_WIDTH;
-
+    //Create board
     wchar_t *board[t_height];
     create_board(board, t_height, t_width);
+
+    print_board(board, t_height);
+
+    getch();
     
-    //free_board(board, t_height);
-    return 0;
+    free_board(board, t_height);
+    
+    endwin();
 }
