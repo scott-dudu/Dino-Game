@@ -59,7 +59,6 @@ void print_board(wchar_t* board[], short height) {
     for (int r = 0; r < height; r++) {
         mvaddwstr(r, 0, board[r]);
     }
-    refresh();
 }
 
 /**
@@ -79,8 +78,19 @@ void print_dino(wchar_t* dino[], short dino_height, short term_height) {
 }
 
 //Update board with next line.
-void update_board(wchar_t* board[], wchar_t new_col[], short height) {
+void update_board(wchar_t* board[], wchar_t new_col[], short height, short width) {
+    for (int r = 0; r < height; r++) {
 
+        for (int c = 0; c < width - 1; c++) {
+            if (board[r][c + 1] != L' ') {
+                board[r][c] = board[r][c + 1];
+            } else if (board[r][c] != L' ' && board[r][c + 1] == L' ') {
+                board[r][c] = L' ';
+            }
+        }
+
+        board[r][width - 1] = new_col[r];
+    }
 }
 
 int main() {    
@@ -115,6 +125,7 @@ int main() {
     noecho();
     curs_set(0);
     keypad(stdscr, TRUE);
+    nodelay(stdscr, TRUE);
 
     //Get dino
     wchar_t* dino[SPRITE_HEIGHT];
@@ -133,32 +144,54 @@ int main() {
     int obst_index = -1;
     wchar_t* obst[SPRITE_HEIGHT];
 
-    // while ((c = getch()) != 'q') {
-    //     //Print the board
-    //     print_board(board, t_height);
+    while ((c = getch()) != 'q') {
+        //Print the board
+        print_board(board, t_height);
+        print_dino(dino, dino_height, t_height);
+        refresh();
 
-    //     //Getting obstacle
-    //     if (obst_index >= obst_len) {
-    //         get_obstacle(obst);
-    //         obst_len = wcslen(obst[0]);
-    //         obst_index = 0;
-    //     } else {
-    //         obst_index++;
-    //     }
+        //Delay board updates.
+        usleep(5000);
 
-    //     //Translate one sprite column into an array
-    //     wchar_t obst_col[SPRITE_HEIGHT];
-    //     for (int row = 0; row < SPRITE_HEIGHT; row++) {
-    //         obst_col[row] = obst[row][obst_index];
-    //     }
+        //Getting obstacle
+        if (obst_index >= obst_len + 30) {
+            get_obstacle(obst);
+            obst_len = wcslen(obst[0]);
+            obst_index = 0;
+        } else {
+            obst_index++;
+        }
 
-    //     //update_board(board, obst_col, t_height);
-    // }
+        //Translate one sprite column into an array
+        wchar_t obst_col[t_height];
+        for (int row = 0; row < t_height; row++) {
+            //Fill sky with spaces.
+            if (row < t_height - SPRITE_HEIGHT) {
+                obst_col[row] = L' ';
+            } else {
+                //Check if index accesses a sprite.
+                if (obst_index < obst_len) {
+                    //Prints ground or obstacle.
+                    wchar_t obst_ch = obst[row - (t_height - SPRITE_HEIGHT)][obst_index];
+
+                    if (obst_ch == L' ' && row == t_height - 3) {
+                        obst_col[row] = L'-';
+                    } else {
+                        obst_col[row] = obst_ch;
+                    }
+                } else {
+                    if (row == t_height - 3) {
+                        obst_col[row] = L'-';
+                    } else {
+                        obst_col[row] = L' ';
+                    }
+                }
+            }
+        }
+
+        update_board(board, obst_col, t_height, t_width);
+    }
     
-    print_board(board, t_height);
-    print_dino(dino, dino_height, t_height);
-    refresh();
-    getch();
     free_board(board, t_height);
     
     endwin();
