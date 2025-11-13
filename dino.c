@@ -9,8 +9,25 @@
 
 #include "sprites.h"
 
+//Minimum terminal size.
 #define MIN_T_HEIGHT 25
 #define MIN_T_WIDTH 85
+
+//Arrow key inputs.
+#define UP_ARROW 3
+#define DOWN_ARROW 2
+
+//Dino statistics.
+#define JUMP_HEIGHT 10
+#define MAX_AIR_TIME 30
+
+//States of the dino in the air, jumping, falling, and ducking.
+typedef enum {
+    DINO_UP,
+    DINO_DOWN,
+    DINO_STAY,
+    DINO_DUCK
+} Dino_State;
 
 //Removes implicit declaration
 int mvaddwstr();
@@ -93,6 +110,44 @@ void update_board(wchar_t* board[], wchar_t new_col[], short height, short width
     }
 }
 
+void update_dino(Dino_State* state, short *dino_height, short *air_time, char input) {
+    //Process character input.
+    if (*dino_height == 0) {
+        if (input == 'w' || input == ' ' || input == UP_ARROW) {
+            *state = DINO_UP;
+        } else if (input == 's' || input == DOWN_ARROW) {
+            *state = DINO_DOWN;
+        } else {
+            *state = DINO_STAY;
+        }
+    }
+
+    //Update height depending if still jumping, in air, or falling.
+    if (*state == DINO_UP) {
+        *dino_height += 1;
+
+        if (*dino_height >= JUMP_HEIGHT) {
+            *dino_height = JUMP_HEIGHT;
+            *state = DINO_STAY;
+        }
+    } else if (*state == DINO_DOWN) {
+        *dino_height -= 1;
+
+        if (*dino_height <= 0) {
+            *dino_height = 0;
+            *state = DINO_STAY;
+        }
+    } else if (*state == DINO_STAY && *dino_height != 0) {
+        *air_time += 1;
+
+        if (*air_time >= MAX_AIR_TIME) {
+            *air_time = 0;
+            *state = DINO_DOWN;
+        }
+    }
+
+}
+
 int main() {    
     // Set the locale for wide-character support
     setlocale(LC_ALL, "");
@@ -104,7 +159,6 @@ int main() {
         perror("ioctl");
         exit(1);
     }
-    
     unsigned short t_height = ws.ws_row;
     unsigned short t_width = ws.ws_col;
     
@@ -133,6 +187,12 @@ int main() {
 
     //Height tracker for dino.
     short dino_height = 0;
+
+    //Dino state tracker.
+    Dino_State state = DINO_STAY;
+
+    //Dino air time tracker.
+    short air_time = 0;
 
     //Create board
     wchar_t *board[t_height];
@@ -189,6 +249,7 @@ int main() {
             }
         }
 
+        update_dino(&state, &dino_height, &air_time, c);
         update_board(board, obst_col, t_height, t_width);
     }
     
