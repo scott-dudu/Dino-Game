@@ -22,6 +22,11 @@
 #define JUMP_HEIGHT 10
 #define MAX_AIR_TIME 30
 
+//Game statistics
+#define GROUND_LEVEL 3
+#define MIN_OBST_DIST 30
+#define MAX_OBST_DIST 65
+
 //States of the dino in the air, jumping, falling, and ducking.
 typedef enum {
     DINO_UP,
@@ -132,14 +137,16 @@ void update_board(wchar_t* board[], wchar_t new_col[], short height, short width
  */
 void update_dino(Dino_State* state, short *dino_height, short *air_time, char input) {
     //Process character input.
-    if (*dino_height == 0) {
-        if (input == 'w' || input == ' ' || input == UP_ARROW) {
-            *state = DINO_UP;
-        } else if (input == 's' || input == DOWN_ARROW) {
+    if (*state != DINO_UP && (input == 'w' || input == ' ' || input == UP_ARROW)) {
+        *state = DINO_UP;
+    } else if (input == 's' || input == DOWN_ARROW) {
+        if (*state == DINO_UP || *dino_height != 0) {
             *state = DINO_DOWN;
         } else {
-            *state = DINO_STAY;
+            *state = DINO_DUCK;
         }
+    } else if (*dino_height == 0) {
+        *state = DINO_STAY;
     }
 
     //Update height depending if still jumping, in air, or falling.
@@ -155,6 +162,7 @@ void update_dino(Dino_State* state, short *dino_height, short *air_time, char in
 
         if (*dino_height <= 0) {
             *dino_height = 0;
+            *air_time = 0;
             *state = DINO_STAY;
         }
     } else if (*state == DINO_STAY && *dino_height != 0) {
@@ -225,6 +233,7 @@ int main() {
     char c;
     int obst_len = -1;
     int obst_index = -1;
+    int obst_diff = MIN_OBST_DIST;
     wchar_t* obst[SPRITE_HEIGHT];
 
     while (game_state == GAME_ON) {
@@ -240,10 +249,11 @@ int main() {
         usleep(5000);
 
         //Getting obstacle
-        if (obst_index >= obst_len + 30) {
+        if (obst_index >= obst_len + obst_diff) {
             get_obstacle(obst);
             obst_len = wcslen(obst[0]);
             obst_index = 0;
+            obst_diff = (rand() % MAX_OBST_DIST) + MIN_OBST_DIST;
         } else {
             obst_index++;
         }
