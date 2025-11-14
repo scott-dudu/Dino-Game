@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <curses.h>
 #include <ncursesw/ncurses.h>
 #include <locale.h>
 #include <wchar.h>
@@ -28,6 +29,12 @@ typedef enum {
     DINO_STAY,
     DINO_DUCK
 } Dino_State;
+
+//States of the game.
+typedef enum {
+    GAME_OVER,
+    GAME_ON
+} Game_State;
 
 //Removes implicit declaration
 int mvaddwstr();
@@ -81,20 +88,30 @@ void print_board(wchar_t* board[], short height) {
 /**
  * Prints the dino onto the board based on the height it is at.
  */
-void print_dino(wchar_t* dino[], short dino_height, short term_height) {
+void print_dino(wchar_t* dino[], short dino_height, short term_height, wchar_t *board[], Game_State *game_state) {
     int len = wcslen(dino[0]);
     
     for (int r = 0; r < SPRITE_HEIGHT; r++) {
         
         for (int c = 0; c < len; c++) {
             if (dino[r][c] != L' ') {
-                mvaddnwstr(term_height - SPRITE_HEIGHT - dino_height + r, c, &dino[r][c], 1);
+                int board_row = term_height - SPRITE_HEIGHT - dino_height + r;
+                mvaddnwstr(board_row, c, &dino[r][c], 1);
+                
+                //Collision detection.
+                wchar_t board_square = board[board_row][c];
+                if (board_square != L' ' && board_square != L'-') {
+                    *game_state = GAME_OVER;
+                }
             }
+
         }
     }
 }
 
-//Update board with next line.
+/**
+ * Update board with next line.
+ */
 void update_board(wchar_t* board[], wchar_t new_col[], short height, short width) {
     for (int r = 0; r < height; r++) {
 
@@ -110,6 +127,9 @@ void update_board(wchar_t* board[], wchar_t new_col[], short height, short width
     }
 }
 
+/**
+ * Update the dino height based on the state it is in.
+ */
 void update_dino(Dino_State* state, short *dino_height, short *air_time, char input) {
     //Process character input.
     if (*dino_height == 0) {
@@ -181,6 +201,9 @@ int main() {
     keypad(stdscr, TRUE);
     nodelay(stdscr, TRUE);
 
+    //Initialize game state.
+    Game_State game_state = GAME_ON;
+
     //Get dino
     wchar_t* dino[SPRITE_HEIGHT];
     get_dino(dino);
@@ -189,7 +212,7 @@ int main() {
     short dino_height = 0;
 
     //Dino state tracker.
-    Dino_State state = DINO_STAY;
+    Dino_State dino_state = DINO_STAY;
 
     //Dino air time tracker.
     short air_time = 0;
@@ -204,10 +227,13 @@ int main() {
     int obst_index = -1;
     wchar_t* obst[SPRITE_HEIGHT];
 
-    while ((c = getch()) != 'q') {
+    while (game_state == GAME_ON) {
+        //Get char input.
+        c = getch();
+
         //Print the board
         print_board(board, t_height);
-        print_dino(dino, dino_height, t_height);
+        print_dino(dino, dino_height, t_height, board, &game_state);
         refresh();
 
         //Delay board updates.
@@ -249,7 +275,7 @@ int main() {
             }
         }
 
-        update_dino(&state, &dino_height, &air_time, c);
+        update_dino(&dino_state, &dino_height, &air_time, c);
         update_board(board, obst_col, t_height, t_width);
     }
     
