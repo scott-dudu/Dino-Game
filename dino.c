@@ -99,14 +99,17 @@ void print_dino(wchar_t* dino[], short dino_height, short term_height, wchar_t *
     for (int r = 0; r < SPRITE_HEIGHT; r++) {
         
         for (int c = 0; c < len; c++) {
-            if (dino[r][c] != L' ') {
-                int board_row = term_height - SPRITE_HEIGHT - dino_height + r;
+            int board_row = term_height - SPRITE_HEIGHT - dino_height + r;
+            wchar_t board_square = board[board_row][c];
+            
+            if (board_square != L'-' || dino[r][c] != L' ') {
                 mvaddnwstr(board_row, c, &dino[r][c], 1);
                 
                 //Collision detection.
-                wchar_t board_square = board[board_row][c];
-                if (board_square != L' ' && board_square != L'-') {
-                    *game_state = GAME_OVER;
+                if (dino[r][c] != L' ') {
+                    if (board_square != L' ' && board_square != L'-') {
+                        *game_state = GAME_OVER;
+                    }
                 }
             }
 
@@ -137,7 +140,7 @@ void update_board(wchar_t* board[], wchar_t new_col[], short height, short width
  */
 void update_dino(Dino_State* state, short *dino_height, short *air_time, char input) {
     //Process character input.
-    if (*state != DINO_UP && (input == 'w' || input == ' ' || input == UP_ARROW)) {
+    if (*dino_height == 0 && (input == 'w' || input == ' ' || input == UP_ARROW)) {
         *state = DINO_UP;
     } else if (input == 's' || input == DOWN_ARROW) {
         if (*state == DINO_UP || *dino_height != 0) {
@@ -174,6 +177,33 @@ void update_dino(Dino_State* state, short *dino_height, short *air_time, char in
         }
     }
 
+}
+
+void translate_obstacle(wchar_t* obst[], wchar_t *obst_col, short obst_index, short obst_len, short height) {
+    for (int row = 0; row < height; row++) {
+            //Fill sky with spaces.
+            if (row < height - SPRITE_HEIGHT) {
+                obst_col[row] = L' ';
+            } else {
+                //Check if index accesses a sprite.
+                if (obst_index < obst_len) {
+                    //Prints ground or obstacle.
+                    wchar_t obst_ch = obst[row - (height - SPRITE_HEIGHT)][obst_index];
+
+                    if (obst_ch == L' ' && row == height - 3) {
+                        obst_col[row] = L'-';
+                    } else {
+                        obst_col[row] = obst_ch;
+                    }
+                } else {
+                    if (row == height - 3) {
+                        obst_col[row] = L'-';
+                    } else {
+                        obst_col[row] = L' ';
+                    }
+                }
+            }
+        }
 }
 
 int main() {    
@@ -214,7 +244,7 @@ int main() {
 
     //Get dino
     wchar_t* dino[SPRITE_HEIGHT];
-    get_dino(dino);
+    get_dino(dino, STAND);
 
     //Height tracker for dino.
     short dino_height = 0;
@@ -230,10 +260,14 @@ int main() {
     create_board(board, t_height, t_width);
     set_rand_gen();
 
+    //Input.
     char c;
-    int obst_len = -1;
-    int obst_index = -1;
-    int obst_diff = MIN_OBST_DIST;
+
+    //Obstacle statistics:
+    //the length of obstacle, which column of obstacle to print, and distance until next obstacle.
+    short obst_len = -1;
+    short obst_index = -1;
+    short obst_diff = MIN_OBST_DIST;
     wchar_t* obst[SPRITE_HEIGHT];
 
     while (game_state == GAME_ON) {
@@ -260,30 +294,8 @@ int main() {
 
         //Translate one sprite column into an array
         wchar_t obst_col[t_height];
-        for (int row = 0; row < t_height; row++) {
-            //Fill sky with spaces.
-            if (row < t_height - SPRITE_HEIGHT) {
-                obst_col[row] = L' ';
-            } else {
-                //Check if index accesses a sprite.
-                if (obst_index < obst_len) {
-                    //Prints ground or obstacle.
-                    wchar_t obst_ch = obst[row - (t_height - SPRITE_HEIGHT)][obst_index];
-
-                    if (obst_ch == L' ' && row == t_height - 3) {
-                        obst_col[row] = L'-';
-                    } else {
-                        obst_col[row] = obst_ch;
-                    }
-                } else {
-                    if (row == t_height - 3) {
-                        obst_col[row] = L'-';
-                    } else {
-                        obst_col[row] = L' ';
-                    }
-                }
-            }
-        }
+        translate_obstacle(obst, obst_col, obst_index, obst_len, t_height);
+        
 
         update_dino(&dino_state, &dino_height, &air_time, c);
         update_board(board, obst_col, t_height, t_width);
