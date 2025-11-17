@@ -7,6 +7,7 @@
 #include <ncursesw/ncurses.h>
 #include <locale.h>
 #include <wchar.h>
+#include <time.h>
 
 #include "sprites.h"
 
@@ -20,12 +21,14 @@
 
 //Dino statistics.
 #define JUMP_HEIGHT 10
-#define MAX_AIR_TIME 30
+#define MAX_AIR_TIME 35
 
 //Game statistics
 #define GROUND_LEVEL 3
 #define MIN_OBST_DIST 30
 #define MAX_OBST_DIST 65
+#define MIN_HOLD_MS 140
+#define MAX_HOLD_MS 500
 
 //States of the dino in the air, jumping, falling, and ducking.
 typedef enum {
@@ -101,8 +104,12 @@ void print_dino(wchar_t* dino[], short dino_height, short term_height, wchar_t *
         for (int c = 0; c < len; c++) {
             int board_row = term_height - SPRITE_HEIGHT - dino_height + r;
             wchar_t board_square = board[board_row][c];
-            
+
+            //Do not over ground with spaces.
             if (board_square != L'-' || dino[r][c] != L' ') {
+
+                //Avoid covering obstacle with empty space.
+                if (board_square != L' ' && dino[r][c] == L' ') continue;
                 mvaddnwstr(board_row, c, &dino[r][c], 1);
                 
                 //Collision detection.
@@ -138,18 +145,21 @@ void update_board(wchar_t* board[], wchar_t new_col[], short height, short width
 /**
  * Update the dino height based on the state it is in.
  */
-void update_dino(Dino_State* state, short *dino_height, short *air_time, char input) {
+void update_dino(wchar_t* dino[], Dino_State* state, short *dino_height, short *air_time, char input) {
     //Process character input.
     if (*dino_height == 0 && (input == 'w' || input == ' ' || input == UP_ARROW)) {
         *state = DINO_UP;
+        get_dino(dino, STAND);
     } else if (input == 's' || input == DOWN_ARROW) {
         if (*state == DINO_UP || *dino_height != 0) {
             *state = DINO_DOWN;
-        } else {
+        } else if (*state != DINO_DUCK) {
             *state = DINO_DUCK;
+            get_dino(dino, DUCK);
         }
     } else if (*dino_height == 0) {
         *state = DINO_STAY;
+        get_dino(dino, STAND);
     }
 
     //Update height depending if still jumping, in air, or falling.
@@ -179,6 +189,9 @@ void update_dino(Dino_State* state, short *dino_height, short *air_time, char in
 
 }
 
+/**
+ * Extract one column at a sspecified index from a given obstacle into an array.
+ */
 void translate_obstacle(wchar_t* obst[], wchar_t *obst_col, short obst_index, short obst_len, short height) {
     for (int row = 0; row < height; row++) {
             //Fill sky with spaces.
@@ -204,6 +217,31 @@ void translate_obstacle(wchar_t* obst[], wchar_t *obst_col, short obst_index, sh
                 }
             }
         }
+}
+
+/**
+ * Function to calculate the current millisecond. Used to handle input buffering.
+ */
+long now_ms(void){
+    struct timespec ts; 
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec*1000L + ts.tv_nsec/1000000L;
+}
+
+/**
+ * Check if the character c is a valid input. Return true if it is.
+ */
+short is_input(char c) {
+    switch (c) {
+        case 'w':
+        case ' ':
+        case UP_ARROW:
+        case 's':
+        case DOWN_ARROW:
+            return 1; //true
+        default:
+            return 0; //false
+    }
 }
 
 int main() {    
@@ -238,6 +276,7 @@ int main() {
     curs_set(0);
     keypad(stdscr, TRUE);
     nodelay(stdscr, TRUE);
+    //timeout(10);
 
     //Initialize game state.
     Game_State game_state = GAME_ON;
@@ -262,6 +301,10 @@ int main() {
 
     //Input.
     char c;
+    int held = 0;
+    int hold_time = 0;
+    long last_seen = 0;
+    long time_now;
 
     //Obstacle statistics:
     //the length of obstacle, which column of obstacle to print, and distance until next obstacle.
@@ -274,7 +317,26 @@ int main() {
         //Get char input.
         c = getch();
 
-        //Print the board
+        //Get time for input buffer.
+        time_now = now_ms();
+        //Input buffer
+        if (is_input(c)) {
+            if (held != c) {
+                hold_time = MAX_HOLD_MS;
+            } else {
+                hold_time = MIN_HOLD_MS;
+            }
+            held = c;
+            last_seen = time_now;
+        }
+        if (held && (time_now - last_seen) > hold_time) {
+            held = 0;
+        } else if (held > 0) {
+            c = held;
+        }
+        printf("%d", c);
+
+        //Print the board.
         print_board(board, t_height);
         print_dino(dino, dino_height, t_height, board, &game_state);
         refresh();
@@ -282,7 +344,7 @@ int main() {
         //Delay board updates.
         usleep(5000);
 
-        //Getting obstacle
+        //Getting obstacle.
         if (obst_index >= obst_len + obst_diff) {
             get_obstacle(obst);
             obst_len = wcslen(obst[0]);
@@ -296,8 +358,7 @@ int main() {
         wchar_t obst_col[t_height];
         translate_obstacle(obst, obst_col, obst_index, obst_len, t_height);
         
-
-        update_dino(&dino_state, &dino_height, &air_time, c);
+        update_dino(dino, &dino_state, &dino_height, &air_time, c);
         update_board(board, obst_col, t_height, t_width);
     }
     
