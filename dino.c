@@ -276,7 +276,6 @@ int main() {
     curs_set(0);
     keypad(stdscr, TRUE);
     nodelay(stdscr, TRUE);
-    //timeout(10);
 
     //Initialize game state.
     Game_State game_state = GAME_ON;
@@ -334,7 +333,6 @@ int main() {
         } else if (held > 0) {
             c = held;
         }
-        printf("%d", c);
 
         //Print the board.
         print_board(board, t_height);
