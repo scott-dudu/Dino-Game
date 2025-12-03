@@ -23,6 +23,12 @@
 #define JUMP_HEIGHT 10
 #define MAX_AIR_TIME 35
 
+//Score statistics
+#define MS_PER_SCORE 500
+#define MAX_SCORE 999999
+#define SCORE_HEIGHT 10
+#define SCORE_WIDTH 14
+
 //Game statistics
 #define GROUND_LEVEL 3
 #define MIN_OBST_DIST 30
@@ -125,6 +131,18 @@ void print_dino(wchar_t* dino[], short dino_height, short term_height, wchar_t *
 }
 
 /**
+ * Print the score on the top right of the screen.
+ */
+void print_score(int score, short t_width) {
+    wchar_t score_text[SCORE_WIDTH];
+    swprintf(score_text, SCORE_WIDTH, L"Score: %06d", score);
+
+    attron(A_BOLD);
+    mvaddwstr(SPRITE_HEIGHT + SCORE_HEIGHT, t_width - SCORE_WIDTH - 5, score_text);
+    attroff(A_BOLD);
+}
+
+/**
  * Update board with next line.
  */
 void update_board(wchar_t* board[], wchar_t new_col[], short height, short width) {
@@ -187,6 +205,18 @@ void update_dino(wchar_t* dino[], Dino_State* state, short *dino_height, short *
         }
     }
 
+}
+
+/**
+ * Update the score.
+ */
+void update_score(int *score, long *last_score, long time_now) {
+    if (time_now - *last_score >= MS_PER_SCORE) {
+        *score += 1;
+        *last_score = time_now;
+
+        if (*score > MAX_SCORE) *score = 0;
+    }
 }
 
 /**
@@ -312,12 +342,18 @@ int main() {
     short obst_diff = MIN_OBST_DIST;
     wchar_t* obst[SPRITE_HEIGHT];
 
+    //Score holder.
+    int score = 0;
+    long last_score_frame;
+
+
     while (game_state == GAME_ON) {
         //Get char input.
         c = getch();
 
-        //Get time for input buffer.
+        //Get time for input buffer and score.
         time_now = now_ms();
+
         //Input buffer
         if (is_input(c)) {
             if (held != c) {
@@ -337,6 +373,7 @@ int main() {
         //Print the board.
         print_board(board, t_height);
         print_dino(dino, dino_height, t_height, board, &game_state);
+        print_score(score, t_width);
         refresh();
 
         //Delay board updates.
@@ -356,8 +393,12 @@ int main() {
         wchar_t obst_col[t_height];
         translate_obstacle(obst, obst_col, obst_index, obst_len, t_height);
         
+        //Update board.
         update_dino(dino, &dino_state, &dino_height, &air_time, c);
         update_board(board, obst_col, t_height, t_width);
+
+        //Update score.
+        update_score(&score, &last_score_frame, time_now);
     }
     
     free_board(board, t_height);
