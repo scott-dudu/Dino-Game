@@ -18,6 +18,9 @@
 //Arrow key inputs.
 #define UP_ARROW 3
 #define DOWN_ARROW 2
+#define LEFT_ARROW 4
+#define RIGHT_ARROW 5
+#define ENTER_KEY 10
 
 //Dino statistics.
 #define JUMP_HEIGHT 10
@@ -47,7 +50,8 @@ typedef enum {
 //States of the game.
 typedef enum {
     GAME_OVER,
-    GAME_ON
+    GAME_ON,
+    GAME_QUIT
 } Game_State;
 
 //Removes implicit declaration
@@ -55,15 +59,10 @@ int mvaddwstr();
 int mvaddnwstr();
 
 /**
-  * Allocate and fill in the board.
-  */
-int create_board(wchar_t* board[], int height, int width) {
-
-    //Build the sky.
+ * Fill the board with a ground and sky.
+ */
+void fill_board(wchar_t* board[], short height, short width) {
     for (int r = 0; r < height; r++) {
-        //Allocate memory for one row. Add one to account for null-terminator.
-        board[r] = (wchar_t *)malloc((width + 1) * sizeof(wchar_t));
-
         //Initialize all characters to be empty spaces.
         for (int c = 0; c < width; c++) {
             if (r == height - 3) {
@@ -72,12 +71,23 @@ int create_board(wchar_t* board[], int height, int width) {
                 board[r][c] = L' ';
             }
         }
+    }
+}
+
+/**
+  * Allocate and fill in the board.
+  */
+void create_board(wchar_t* board[], int height, int width) {
+
+    for (int r = 0; r < height; r++) {
+        //Allocate memory for one row. Add one to account for null-terminator.
+        board[r] = (wchar_t *)malloc((width + 1) * sizeof(wchar_t));
 
         //End string
         board[r][width] = '\0';
     }
 
-    return 0;
+    fill_board(board, height, width);
 }
 
 /**
@@ -133,12 +143,12 @@ void print_dino(wchar_t* dino[], short dino_height, short term_height, wchar_t *
 /**
  * Print the score on the top right of the screen.
  */
-void print_score(int score, short t_width) {
+void print_score(int score, short t_height, short t_width) {
     wchar_t score_text[SCORE_WIDTH];
     swprintf(score_text, SCORE_WIDTH, L"Score: %06d", score);
-
+    
     attron(A_BOLD);
-    mvaddwstr(SPRITE_HEIGHT + SCORE_HEIGHT, t_width - SCORE_WIDTH - 5, score_text);
+    mvaddwstr(t_height - SPRITE_HEIGHT - SCORE_HEIGHT, t_width - SCORE_WIDTH - 5, score_text);
     attroff(A_BOLD);
 }
 
@@ -233,13 +243,13 @@ void translate_obstacle(wchar_t* obst[], wchar_t *obst_col, short obst_index, sh
                     //Prints ground or obstacle.
                     wchar_t obst_ch = obst[row - (height - SPRITE_HEIGHT)][obst_index];
 
-                    if (obst_ch == L' ' && row == height - 3) {
+                    if (obst_ch == L' ' && row == height - GROUND_LEVEL) {
                         obst_col[row] = L'-';
                     } else {
                         obst_col[row] = obst_ch;
                     }
                 } else {
-                    if (row == height - 3) {
+                    if (row == height - GROUND_LEVEL) {
                         obst_col[row] = L'-';
                     } else {
                         obst_col[row] = L' ';
@@ -274,6 +284,148 @@ short is_input(char c) {
     }
 }
 
+/**
+ * Play the game.
+ */
+void play_game(wchar_t *board[], short t_height, short t_width, Game_State* state) {
+    //Get dino
+    wchar_t* dino[SPRITE_HEIGHT];
+    get_dino(dino, STAND);
+
+    //Height tracker for dino.
+    short dino_height = 0;
+
+    //Dino state tracker.
+    Dino_State dino_state = DINO_STAY;
+
+    //Dino air time tracker.
+    short air_time = 0;
+
+    //Input.
+    char c;
+    int held = 0;
+    int hold_time = 0;
+    long last_seen = 0;
+    long time_now;
+
+    //Obstacle statistics:
+    //the length of obstacle, which column of obstacle to print, and distance until next obstacle.
+    short obst_len = -1;
+    short obst_index = -1;
+    short obst_diff = MIN_OBST_DIST;
+    wchar_t* obst[SPRITE_HEIGHT];
+
+    //Score holder.
+    int score = 0;
+    long last_score_frame = now_ms();
+
+
+    while (*state == GAME_ON) {
+        //Get char input.
+        c = getch();
+
+        //Get time for input buffer and score.
+        time_now = now_ms();
+
+        //Input buffer
+        if (is_input(c)) {
+            if (held != c) {
+                hold_time = MAX_HOLD_MS;
+            } else {
+                hold_time = MIN_HOLD_MS;
+            }
+            held = c;
+            last_seen = time_now;
+        }
+        if (held && (time_now - last_seen) > hold_time) {
+            held = 0;
+        } else if (held > 0) {
+            c = held;
+        }
+
+        //Print the board.
+        print_board(board, t_height);
+        print_dino(dino, dino_height, t_height, board, state);
+        print_score(score, t_height, t_width);
+        refresh();
+
+        //Delay board updates.
+        usleep(5000);
+
+        //Getting obstacle.
+        if (obst_index >= obst_len + obst_diff) {
+            get_obstacle(obst);
+            obst_len = wcslen(obst[0]);
+            obst_index = 0;
+            obst_diff = (rand() % MAX_OBST_DIST) + MIN_OBST_DIST;
+        } else {
+            obst_index++;
+        }
+
+        //Translate one sprite column into an array
+        wchar_t obst_col[t_height];
+        translate_obstacle(obst, obst_col, obst_index, obst_len, t_height);
+        
+        //Update board.
+        update_dino(dino, &dino_state, &dino_height, &air_time, c);
+        update_board(board, obst_col, t_height, t_width);
+
+        //Update score.
+        update_score(&score, &last_score_frame, time_now);
+    }
+}
+
+/**
+ * Display the end screen and ask the player if they want to play again.
+ */
+void dead_screen(wchar_t *board[], short t_height, short t_width, Game_State *state) {
+    char input;
+
+    //Choice hover print style.
+    init_pair(1, COLOR_BLACK, COLOR_WHITE);
+    attron(A_BOLD);
+
+    //Print play again message.
+    mvaddwstr(t_height / 2, (t_width / 2) - 5, L"PLAY AGAIN?");
+    mvaddwstr((t_height / 2) + 1, (t_width / 2) - 9, L"(USE <- and -> KEYS)");
+
+    //Choice selector (0 == yes, 1 == no)
+    short cursor = 1;
+
+    //Continue looping until a choice has been selected.
+    while (*state == GAME_OVER) {
+        input = getch();
+
+        //Display choices.
+        if (cursor == 0) attron(COLOR_PAIR(1));
+        mvaddwstr((t_height / 2) + 3, (t_width / 2) - 6, L" YES ");
+        attroff(COLOR_PAIR(1));
+
+        if (cursor == 1) attron(COLOR_PAIR(1));
+        mvaddwstr((t_height / 2) + 3, (t_width / 2) + 3, L" NO ");
+        attroff(COLOR_PAIR(1));
+
+        //Get input.
+        if (input == LEFT_ARROW || input == RIGHT_ARROW) {
+            cursor = (cursor + 1) % 2;
+        } else if (input == ENTER_KEY) {
+            if (cursor == 0) {
+                *state = GAME_ON;
+            } else {
+                *state = GAME_QUIT;
+            }
+        }
+
+        refresh();
+    }
+
+    attroff(A_BOLD);
+
+    if (*state == GAME_ON) {
+        fill_board(board, t_height, t_width);
+    }
+}
+
 int main() {    
     // Set the locale for wide-character support
     setlocale(LC_ALL, "");
@@ -304,101 +456,21 @@ int main() {
     cbreak();
     noecho();
     curs_set(0);
+    start_color();
     keypad(stdscr, TRUE);
     nodelay(stdscr, TRUE);
 
     //Initialize game state.
     Game_State game_state = GAME_ON;
 
-    //Get dino
-    wchar_t* dino[SPRITE_HEIGHT];
-    get_dino(dino, STAND);
-
-    //Height tracker for dino.
-    short dino_height = 0;
-
-    //Dino state tracker.
-    Dino_State dino_state = DINO_STAY;
-
-    //Dino air time tracker.
-    short air_time = 0;
-
     //Create board
     wchar_t *board[t_height];
     create_board(board, t_height, t_width);
     set_rand_gen();
 
-    //Input.
-    char c;
-    int held = 0;
-    int hold_time = 0;
-    long last_seen = 0;
-    long time_now;
-
-    //Obstacle statistics:
-    //the length of obstacle, which column of obstacle to print, and distance until next obstacle.
-    short obst_len = -1;
-    short obst_index = -1;
-    short obst_diff = MIN_OBST_DIST;
-    wchar_t* obst[SPRITE_HEIGHT];
-
-    //Score holder.
-    int score = 0;
-    long last_score_frame;
-
-
-    while (game_state == GAME_ON) {
-        //Get char input.
-        c = getch();
-
-        //Get time for input buffer and score.
-        time_now = now_ms();
-
-        //Input buffer
-        if (is_input(c)) {
-            if (held != c) {
-                hold_time = MAX_HOLD_MS;
-            } else {
-                hold_time = MIN_HOLD_MS;
-            }
-            held = c;
-            last_seen = time_now;
-        }
-        if (held && (time_now - last_seen) > hold_time) {
-            held = 0;
-        } else if (held > 0) {
-            c = held;
-        }
-
-        //Print the board.
-        print_board(board, t_height);
-        print_dino(dino, dino_height, t_height, board, &game_state);
-        print_score(score, t_width);
-        refresh();
-
-        //Delay board updates.
-        usleep(5000);
-
-        //Getting obstacle.
-        if (obst_index >= obst_len + obst_diff) {
-            get_obstacle(obst);
-            obst_len = wcslen(obst[0]);
-            obst_index = 0;
-            obst_diff = (rand() % MAX_OBST_DIST) + MIN_OBST_DIST;
-        } else {
-            obst_index++;
-        }
-
-        //Translate one sprite column into an array
-        wchar_t obst_col[t_height];
-        translate_obstacle(obst, obst_col, obst_index, obst_len, t_height);
-        
-        //Update board.
-        update_dino(dino, &dino_state, &dino_height, &air_time, c);
-        update_board(board, obst_col, t_height, t_width);
-
-        //Update score.
-        update_score(&score, &last_score_frame, time_now);
+    while (game_state != GAME_QUIT) {
+        play_game(board, t_height, t_width, &game_state);
+        dead_screen(board, t_height, t_width, &game_state);
     }
     
     free_board(board, t_height);
