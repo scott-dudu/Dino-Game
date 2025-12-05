@@ -5,7 +5,10 @@
 
 typedef enum {
     STAND,
-    DUCK
+    STAND_LEFT,
+    STAND_RIGHT,
+    DUCK_LEFT,
+    DUCK_RIGHT
 } Stance;
 
 void set_rand_gen();

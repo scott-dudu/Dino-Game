@@ -25,9 +25,10 @@
 //Dino statistics.
 #define JUMP_HEIGHT 10
 #define MAX_AIR_TIME 35
+#define MS_PER_DINO_FRAME 100
 
 //Score statistics
-#define MS_PER_SCORE 500
+#define MS_PER_SCORE 100
 #define MAX_SCORE 999999
 #define SCORE_HEIGHT 10
 #define SCORE_WIDTH 14
@@ -97,6 +98,31 @@ void free_board(wchar_t* board[], short height) {
     //Free each row of the board.
     for (int r = 0; r < height; r++) {
         free(board[r]);
+    }
+}
+
+/**
+ * Function to calculate the current millisecond. Used to handle input buffering.
+ */
+long now_ms(void){
+    struct timespec ts; 
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec*1000L + ts.tv_nsec/1000000L;
+}
+
+/**
+ * Check if the character c is a valid input. Return true if it is.
+ */
+short is_input(char c) {
+    switch (c) {
+        case 'w':
+        case ' ':
+        case UP_ARROW:
+        case 's':
+        case DOWN_ARROW:
+            return 1; //true
+        default:
+            return 0; //false
     }
 }
 
@@ -171,24 +197,61 @@ void update_board(wchar_t* board[], wchar_t new_col[], short height, short width
 }
 
 /**
+ * Helper function to determine the next stance the dino should be based on the state.
+ * Creates the running animation of the dino.
+ */
+void update_stance(Dino_State state, Stance* stance, long* prev_switch) {
+    //If the time between stances is too short, do not change stance.
+    long time = now_ms();
+    if (time - *prev_switch < MS_PER_DINO_FRAME) {
+        return;
+    } else {
+        *prev_switch = time;
+    }
+
+    //Determine the stance.
+    if (*stance == STAND) { //Left foot after starting position.
+
+        *stance = STAND_LEFT;
+
+    } else if (state == DINO_DUCK) { //Go into duck.
+
+        if (*stance == STAND_LEFT || *stance == DUCK_LEFT) { //If previous foot was left.
+            *stance = DUCK_RIGHT;
+        } else if (*stance == STAND_RIGHT || *stance == DUCK_RIGHT) { //If previous foot was right.
+            *stance = DUCK_LEFT;
+        }
+
+    } else { //The dino is upright.
+
+        if (*stance == STAND_LEFT || *stance == DUCK_LEFT) { //If previous foot was left.
+            *stance = STAND_RIGHT;
+        } else if (*stance == STAND_RIGHT || *stance == DUCK_RIGHT) { //If previous foot was right.
+            *stance = STAND_LEFT;
+        }
+
+    }
+}
+
+/**
  * Update the dino height based on the state it is in.
  */
-void update_dino(wchar_t* dino[], Dino_State* state, short *dino_height, short *air_time, char input) {
+void update_dino(wchar_t* dino[], Dino_State* state, Stance* stance, short *dino_height, short *air_time, char input, long* prev_switch) {
     //Process character input.
     if (*dino_height == 0 && (input == 'w' || input == ' ' || input == UP_ARROW)) {
         *state = DINO_UP;
-        get_dino(dino, STAND);
     } else if (input == 's' || input == DOWN_ARROW) {
         if (*state == DINO_UP || *dino_height != 0) {
             *state = DINO_DOWN;
         } else if (*state != DINO_DUCK) {
             *state = DINO_DUCK;
-            get_dino(dino, DUCK);
         }
     } else if (*dino_height == 0) {
         *state = DINO_STAY;
-        get_dino(dino, STAND);
     }
+
+    update_stance(*state, stance, prev_switch);
+    get_dino(dino, *stance);
 
     //Update height depending if still jumping, in air, or falling.
     if (*state == DINO_UP) {
@@ -260,31 +323,6 @@ void translate_obstacle(wchar_t* obst[], wchar_t *obst_col, short obst_index, sh
 }
 
 /**
- * Function to calculate the current millisecond. Used to handle input buffering.
- */
-long now_ms(void){
-    struct timespec ts; 
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec*1000L + ts.tv_nsec/1000000L;
-}
-
-/**
- * Check if the character c is a valid input. Return true if it is.
- */
-short is_input(char c) {
-    switch (c) {
-        case 'w':
-        case ' ':
-        case UP_ARROW:
-        case 's':
-        case DOWN_ARROW:
-            return 1; //true
-        default:
-            return 0; //false
-    }
-}
-
-/**
  * Play the game.
  */
 void play_game(wchar_t *board[], short t_height, short t_width, Game_State* state) {
@@ -297,6 +335,7 @@ void play_game(wchar_t *board[], short t_height, short t_width, Game_State* stat
 
     //Dino state tracker.
     Dino_State dino_state = DINO_STAY;
+    Stance dino_stance = STAND;
 
     //Dino air time tracker.
     short air_time = 0;
@@ -318,6 +357,7 @@ void play_game(wchar_t *board[], short t_height, short t_width, Game_State* stat
     //Score holder.
     int score = 0;
     long last_score_frame = now_ms();
+    long time_of_stance = now_ms();
 
 
     while (*state == GAME_ON) {
@@ -367,7 +407,7 @@ void play_game(wchar_t *board[], short t_height, short t_width, Game_State* stat
         translate_obstacle(obst, obst_col, obst_index, obst_len, t_height);
         
         //Update board.
-        update_dino(dino, &dino_state, &dino_height, &air_time, c);
+        update_dino(dino, &dino_state, &dino_stance, &dino_height, &air_time, c, &time_of_stance);
         update_board(board, obst_col, t_height, t_width);
 
         //Update score.
